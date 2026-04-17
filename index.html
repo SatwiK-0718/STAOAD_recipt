@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>STAOAD Receipt Generator (4 Per Page)</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        background: #2c3e50;
+        padding: 30px;
+        color: #fff;
+        text-align: center;
+      }
+
+      .card {
+        background: white;
+        color: #333;
+        padding: 25px;
+        border-radius: 12px;
+        display: inline-block;
+        width: 450px;
+      }
+
+      input {
+        margin: 20px 0;
+        width: 100%;
+      }
+
+      #dlBtn {
+        background: #27ae60;
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        font-size: 16px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+
+      #dlBtn:disabled {
+        background: #bdc3c7;
+      }
+
+      #render-zone {
+        background: white;
+        width: 210mm;
+        margin: 0 auto;
+        color: #000;
+      }
+
+      /* ✅ Each A4 page */
+      .page {
+        width: 210mm;
+        height: 297mm;
+        page-break-after: always;
+      }
+
+      /* ✅ Each receipt (4 per page) */
+      .receipt {
+        width: 100%;
+        height: 74.25mm;
+        padding: 6mm 12mm;
+        box-sizing: border-box;
+        border-bottom: 1px dashed #999;
+        font-family: "Times New Roman", Times, serif;
+      }
+
+      .header {
+        text-align: center;
+      }
+      .header h2 {
+        margin: 0;
+        font-size: 11.5pt;
+      }
+      .header p {
+        margin: 0;
+        font-size: 8.5pt;
+        font-style: italic;
+      }
+
+      .top-meta {
+        display: flex;
+        justify-content: center;
+        position: relative;
+        border-bottom: 1px solid #000;
+      }
+
+      .receipt-title {
+        font-size: 11pt;
+        font-weight: bold;
+        text-decoration: underline;
+      }
+
+      .date-line {
+        position: absolute;
+        right: 0;
+        font-size: 10pt;
+      }
+
+      .body-text {
+        font-size: 10pt;
+        margin-top: 5px;
+      }
+
+      .row-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 10px;
+      }
+
+      .val {
+        color: #0033cc;
+        font-family: "Courier New", monospace;
+        font-weight: bold;
+        border-bottom: 1px dotted #0033cc;
+        padding: 0 4px;
+      }
+
+      .footer {
+        margin-top: 5px;
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .sig-box {
+        width: 180px;
+        text-align: center;
+        border-top: 1px solid #000;
+        padding-top: 2px;
+        font-size: 8.5pt;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <h2>STAOAD Receipt Generator</h2>
+      <p>Upload Excel → Generate PDF</p>
+      <input type="file" id="xlInput" accept=".csv, .xlsx" />
+      <button id="dlBtn" onclick="downloadPDF()" disabled>Download PDF</button>
+    </div>
+
+    <div id="render-zone" style="display: none"></div>
+
+    <script>
+      let dataRows = [];
+
+      // ✅ Read Excel
+      document
+        .getElementById("xlInput")
+        .addEventListener("change", function (e) {
+          const reader = new FileReader();
+
+          reader.onload = function (event) {
+            const data = new Uint8Array(event.target.result);
+            const wb = XLSX.read(data, { type: "array", cellDates: true });
+
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+
+            // ✅ IMPORTANT FIX (no date shift)
+            const raw = XLSX.utils.sheet_to_json(sheet, {
+              defval: "",
+              raw: false, // 👈 keeps Excel format as-is
+            });
+
+            dataRows = raw.filter((r) => r["Owner"] && r["Flat No."]);
+
+            if (dataRows.length) {
+              document.getElementById("dlBtn").disabled = false;
+              buildHTML();
+            } else {
+              alert("No valid data found in Excel");
+            }
+          };
+
+          reader.readAsArrayBuffer(e.target.files[0]);
+        });
+
+      // ✅ Simple date (no conversion)
+      function formatDate(v) {
+        return v || "";
+      }
+
+      // ✅ Build receipts (4 per page)
+      function buildHTML() {
+        const zone = document.getElementById("render-zone");
+        zone.innerHTML = "";
+
+        let pageDiv;
+
+        dataRows.forEach((row, index) => {
+          if (index % 4 === 0) {
+            pageDiv = document.createElement("div");
+            pageDiv.className = "page";
+            zone.appendChild(pageDiv);
+          }
+
+          const receipt = document.createElement("div");
+          receipt.className = "receipt";
+
+          receipt.innerHTML = `
+            <div class="header">
+                <h2>SRI TRIGUNATMIKA APARTMENT OWNERS ASSOCIATION</h2>
+                <p>Saptapur, Dharwad</p>
+            </div>
+
+            <div class="top-meta">
+                <span class="receipt-title">RECEIPT</span>
+                <span class="date-line">Date: <span class="val">${formatDate(row["Date"])}</span></span>
+            </div>
+
+            <div class="body-text">
+                <div class="row-grid">
+                    <span>Receipt No: <span class="val">${row["Receipt No."]}</span></span>
+                    <span>Flat No: <span class="val">${row["Flat No."]}</span></span>
+                </div>
+
+                <div>Received from:</div>
+
+                <div>
+                    Owner:
+                    <span class="val">${row["Owner"]}</span>
+                </div>
+
+                <div class="row-grid">
+                    <span>Amount: <span class="val">₹ ${row["Amount"]}</span></span>
+                    <span>Mode: <span class="val">${row["Mode of Pyt"]}</span></span>
+                </div>
+
+                <div class="row-grid">
+                    <span>Ref No: <span class="val">${row["Chq No/Trf date"]}</span></span>
+                    <span>Dated: <span class="val">${formatDate(row["Trfr/Chq date"])}</span></span>
+                </div>
+
+                <div>Period: <span class="val">${row["Period"]}</span></div>
+            </div>
+
+            <div class="footer">
+                <div class="sig-box">
+                    For STAOAD<br>
+                    Secretary / Treasurer
+                </div>
+            </div>
+        `;
+
+          pageDiv.appendChild(receipt);
+        });
+      }
+
+      // ✅ Download PDF
+      function downloadPDF() {
+        const element = document.getElementById("render-zone");
+        element.style.display = "block";
+
+        html2pdf()
+          .set({
+            margin: 0,
+            filename: "STAOAD_Receipts.pdf",
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+          })
+          .from(element)
+          .save()
+          .then(() => {
+            element.style.display = "none";
+          });
+      }
+    </script>
+  </body>
+</html>
